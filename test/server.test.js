@@ -16,9 +16,45 @@ async function withServer(run) {
   }
 }
 
-test("serves the app shell", async () => {
+async function loginCookie(baseUrl, password = "1111") {
+  const response = await fetch(`${baseUrl}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ password }),
+    redirect: "manual",
+  });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "/");
+  return response.headers.get("set-cookie").split(";")[0];
+}
+
+test("requires the app password before serving the app", async () => {
   await withServer(async (baseUrl) => {
-    const response = await fetch(baseUrl);
+    const response = await fetch(baseUrl, { redirect: "manual" });
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "/login");
+
+    const login = await fetch(`${baseUrl}/login`);
+    assert.equal(login.status, 200);
+    assert.match(await login.text(), /パスワードを入力/);
+
+    const failed = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ password: "0000" }),
+    });
+    assert.equal(failed.status, 401);
+    assert.match(await failed.text(), /パスワードが違います/);
+
+    const api = await fetch(`${baseUrl}/api/status`);
+    assert.equal(api.status, 401);
+  });
+});
+
+test("serves the app shell after login", async () => {
+  await withServer(async (baseUrl) => {
+    const cookie = await loginCookie(baseUrl);
+    const response = await fetch(baseUrl, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
     const html = await response.text();
     assert.match(html, /Topic Radio/);
@@ -29,7 +65,8 @@ test("serves the app shell", async () => {
 
 test("returns API configuration status", async () => {
   await withServer(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/status`);
+    const cookie = await loginCookie(baseUrl);
+    const response = await fetch(`${baseUrl}/api/status`, { headers: { Cookie: cookie } });
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(typeof payload.apiConfigured, "boolean");
@@ -38,6 +75,7 @@ test("returns API configuration status", async () => {
 
 test("serves the bundled free background music tracks as audio", async () => {
   await withServer(async (baseUrl) => {
+    const cookie = await loginCookie(baseUrl);
     const tracks = [
       "upbeat-jazz.mp3",
       "light-it-up-boy.mp3",
@@ -49,7 +87,7 @@ test("serves the bundled free background music tracks as audio", async () => {
       "the-root.mp3",
     ];
     for (const track of tracks) {
-      const response = await fetch(`${baseUrl}/audio/${track}`);
+      const response = await fetch(`${baseUrl}/audio/${track}`, { headers: { Cookie: cookie } });
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("content-type"), "audio/mpeg");
       assert.ok((await response.arrayBuffer()).byteLength > 1000);
@@ -62,9 +100,10 @@ test("creates a preview episode when no API key is present", async () => {
   delete process.env.OPENAI_API_KEY;
   try {
     await withServer(async (baseUrl) => {
+      const cookie = await loginCookie(baseUrl);
       const response = await fetch(`${baseUrl}/api/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Cookie: cookie },
         body: JSON.stringify({ topic: "urban gardening", level: "beginner", duration: "30" }),
       });
       const payload = await response.json();
@@ -87,9 +126,10 @@ test("adds a continuation installment and stops at a fixed duration", async () =
   delete process.env.OPENAI_API_KEY;
   try {
     await withServer(async (baseUrl) => {
+      const cookie = await loginCookie(baseUrl);
       const response = await fetch(`${baseUrl}/api/continue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Cookie: cookie },
         body: JSON.stringify({ topic: "urban gardening", level: "beginner", duration: "30", part: 3 }),
       });
       const payload = await response.json();
@@ -110,9 +150,10 @@ test("limits the continuous preview to a second installment", async () => {
 
 test("rejects invalid English levels", async () => {
   await withServer(async (baseUrl) => {
+    const cookie = await loginCookie(baseUrl);
     const response = await fetch(`${baseUrl}/api/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Cookie: cookie },
       body: JSON.stringify({ topic: "urban gardening", level: "expert-ish" }),
     });
     assert.equal(response.status, 400);
@@ -121,9 +162,10 @@ test("rejects invalid English levels", async () => {
 
 test("rejects invalid show durations", async () => {
   await withServer(async (baseUrl) => {
+    const cookie = await loginCookie(baseUrl);
     const response = await fetch(`${baseUrl}/api/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Cookie: cookie },
       body: JSON.stringify({ topic: "urban gardening", level: "beginner", duration: "forever-ish" }),
     });
     assert.equal(response.status, 400);
@@ -145,7 +187,7 @@ test("asks for a casual current radio show with Japanese interface text", () => 
   assert.match(prompt, /60-minute show/);
   assert.match(prompt, /installment 2/);
   assert.match(prompt, /Japanese junior high school level/);
-  assert.match(buildPrompt("coffee", "starter"), /young child's everyday conversation level/);
+  assert.match(buildPrompt("coffee", "starter"), /very common words a child would know/);
   assert.match(buildPrompt("coffee", "intermediate"), /Japanese high school to university student level/);
   assert.match(buildPrompt("coffee", "advanced"), /Eiken Grade 2 to Grade 1 range/);
   assert.match(mockEpisode("coffee", "starter").title, /を楽しくキャッチアップ/);

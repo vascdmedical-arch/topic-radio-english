@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer as createHttpServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,8 @@ const ROOT = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT, "public");
 const SCRIPT_MODEL = process.env.OPENAI_SCRIPT_MODEL || "gpt-5.4-mini";
 const TTS_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
+const APP_PASSWORD = process.env.APP_PASSWORD || "1111";
+const AUTH_COOKIE = "topic_radio_auth";
 const LEVELS = new Set(["starter", "beginner", "intermediate", "advanced", "native"]);
 const DURATIONS = new Set(["10", "30", "60", "continuous"]);
 const SPEAKERS = new Set(["Maya", "Ben"]);
@@ -22,7 +25,7 @@ const MIME_TYPES = {
 
 const LEVEL_GUIDE = {
   starter:
-    "Use English at a young child's everyday conversation level: very common words, concrete ideas, short friendly sentences, no idioms, gentle repetition, and clear explanations. Imagine simple parent-child or classroom talk. Target 650 to 850 spoken words.",
+    "Use extremely easy English for absolute beginners: very short sentences, very common words a child would know, simple verbs like be/have/go/like/want/see, concrete ideas, no idioms, no phrasal verbs unless very common, and no long explanations. Keep most turns to one or two short sentences. Target 550 to 750 spoken words.",
   beginner:
     "Use English at a Japanese junior high school level: simple everyday vocabulary, mostly short sentences, basic grammar, and careful explanations of any new terms. Keep the conversation natural but avoid advanced expressions. Target 850 to 1000 spoken words.",
   intermediate:
@@ -181,19 +184,116 @@ function json(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
-async function readJson(req) {
+async function readBody(req, maxLength = 64_000) {
   let raw = "";
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 64_000) {
+    if (raw.length > maxLength) {
       throw new HttpError(413, "入力内容が長すぎます。");
     }
   }
+  return raw;
+}
+
+async function readJson(req) {
+  const raw = await readBody(req);
   try {
     return JSON.parse(raw || "{}");
   } catch {
     throw new HttpError(400, "入力内容を読み取れませんでした。");
   }
+}
+
+function timingSafeStringEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function authToken() {
+  return createHash("sha256").update(`topic-radio:${APP_PASSWORD}`).digest("hex");
+}
+
+function parseCookies(req) {
+  const cookies = new Map();
+  for (const part of String(req.headers.cookie || "").split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name) cookies.set(name, decodeURIComponent(value.join("=") || ""));
+  }
+  return cookies;
+}
+
+function isAuthenticated(req) {
+  const token = parseCookies(req).get(AUTH_COOKIE);
+  return token ? timingSafeStringEqual(token, authToken()) : false;
+}
+
+function authCookie(req) {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "");
+  const secure = forwardedProto.includes("https");
+  return `${AUTH_COOKIE}=${encodeURIComponent(authToken())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure ? "; Secure" : ""}`;
+}
+
+function redirect(res, location, headers = {}) {
+  res.writeHead(302, { Location: location, ...headers });
+  res.end();
+}
+
+function loginPage({ error = false } = {}) {
+  return `<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Topic Radio ログイン</title>
+    <style>
+      :root { --ink: #17332e; --muted: #60736d; --paper: #f6f1e8; --card: #fffdf8; --line: #dfdbd1; --mint: #cce7dc; --orange: #e6653c; --yellow: #eed584; }
+      * { box-sizing: border-box; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; color: var(--ink); background: radial-gradient(circle at 10% 0%, rgba(238,213,132,.5), transparent 24rem), linear-gradient(180deg, #f7f2e9, #f3eee5); font-family: -apple-system, BlinkMacSystemFont, "Noto Sans JP", "Helvetica Neue", Arial, sans-serif; }
+      main { width: min(440px, 100%); padding: 32px; border: 1px solid rgba(23,51,46,.1); border-radius: 24px; background: rgba(255,253,248,.94); box-shadow: 0 22px 60px rgba(38,64,58,.12); }
+      .brand { display: flex; gap: 12px; align-items: center; margin-bottom: 26px; font-weight: 700; }
+      .mark { width: 38px; height: 38px; display: grid; place-items: center; color: #fff; border-radius: 50%; background: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      h1 { margin: 0 0 10px; font-size: 30px; letter-spacing: -.04em; }
+      p { margin: 0 0 22px; color: var(--muted); line-height: 1.6; }
+      label { display: block; margin-bottom: 10px; font-size: 14px; font-weight: 700; }
+      input { width: 100%; padding: 14px 15px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; color: var(--ink); font-size: 20px; letter-spacing: .3em; text-align: center; }
+      input:focus { outline: none; border-color: #9bcbbb; box-shadow: 0 0 0 4px rgba(155,203,187,.22); }
+      button { width: 100%; margin-top: 18px; padding: 14px 16px; border: 0; border-radius: 10px; color: #fff; background: var(--ink); font-weight: 700; cursor: pointer; }
+      .error { margin: 14px 0 0; padding: 10px 12px; border-radius: 9px; color: #8d321c; background: rgba(230,101,60,.12); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><span class="mark">TR</span><span>トピックラジオ</span></div>
+      <h1>パスワードを入力</h1>
+      <p>英語ラジオアプリを開くには、4桁のパスワードを入力してください。</p>
+      <form method="post" action="/login">
+        <label for="password">パスワード</label>
+        <input id="password" name="password" type="password" inputmode="numeric" autocomplete="current-password" maxlength="32" autofocus required />
+        <button type="submit">アプリを開く</button>
+      </form>
+      ${error ? '<p class="error">パスワードが違います。もう一度入力してください。</p>' : ""}
+    </main>
+  </body>
+</html>`;
+}
+
+function serveLogin(res, { error = false, statusCode = 200 } = {}) {
+  res.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(loginPage({ error }));
+}
+
+async function readLoginPassword(req) {
+  const raw = await readBody(req, 2_000);
+  if (String(req.headers["content-type"] || "").includes("application/json")) {
+    try {
+      return String(JSON.parse(raw || "{}").password || "");
+    } catch {
+      return "";
+    }
+  }
+  return String(new URLSearchParams(raw).get("password") || "");
 }
 
 class HttpError extends Error {
@@ -396,14 +496,36 @@ async function serveStatic(req, res) {
 export function createServer() {
   return createHttpServer(async (req, res) => {
     try {
-      if (req.method === "GET" && req.url === "/api/status") {
+      const url = new URL(req.url, "http://localhost");
+      if (req.method === "GET" && url.pathname === "/health") {
+        return json(res, 200, { ok: true });
+      }
+      if (req.method === "GET" && url.pathname === "/login") {
+        if (isAuthenticated(req)) return redirect(res, "/");
+        return serveLogin(res, { error: url.searchParams.has("error") });
+      }
+      if (req.method === "POST" && url.pathname === "/login") {
+        const password = await readLoginPassword(req);
+        if (timingSafeStringEqual(password, APP_PASSWORD)) {
+          return redirect(res, "/", { "Set-Cookie": authCookie(req) });
+        }
+        return serveLogin(res, { error: true, statusCode: 401 });
+      }
+      if (!isAuthenticated(req)) {
+        if (url.pathname.startsWith("/api/")) {
+          return json(res, 401, { error: "パスワードを入力してください。" });
+        }
+        if (req.method === "GET") return redirect(res, "/login");
+        throw new HttpError(401, "パスワードを入力してください。");
+      }
+      if (req.method === "GET" && url.pathname === "/api/status") {
         return json(res, 200, {
           apiConfigured: Boolean(process.env.OPENAI_API_KEY),
           scriptModel: SCRIPT_MODEL,
           ttsModel: TTS_MODEL,
         });
       }
-      if (req.method === "POST" && req.url === "/api/generate") {
+      if (req.method === "POST" && url.pathname === "/api/generate") {
         const body = await readJson(req);
         const episode = await generateEpisode(
           requireTopic(body.topic),
@@ -412,7 +534,7 @@ export function createServer() {
         );
         return json(res, 200, episode);
       }
-      if (req.method === "POST" && req.url === "/api/continue") {
+      if (req.method === "POST" && url.pathname === "/api/continue") {
         const body = await readJson(req);
         const episode = await generateEpisode(
           requireTopic(body.topic),
@@ -425,7 +547,7 @@ export function createServer() {
         );
         return json(res, 200, episode);
       }
-      if (req.method === "POST" && req.url === "/api/speech") {
+      if (req.method === "POST" && url.pathname === "/api/speech") {
         const speech = await synthesizeSpeech(requireSpeechRequest(await readJson(req)));
         res.writeHead(200, {
           "Content-Type": speech.headers.get("content-type") || "audio/mpeg",

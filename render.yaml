@@ -5,8 +5,10 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/status
+    healthCheckPath: /health
     envVars:
+      - key: APP_PASSWORD
+        value: "1111"
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_SCRIPT_MODEL
