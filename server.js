@@ -22,13 +22,13 @@ const MIME_TYPES = {
 
 const LEVEL_GUIDE = {
   starter:
-    "Use extremely simple English: short sentences, basic vocabulary, gentle repetition, and clear explanations. Target 750 to 900 spoken words.",
+    "Use English at a young child's everyday conversation level: very common words, concrete ideas, short friendly sentences, no idioms, gentle repetition, and clear explanations. Imagine simple parent-child or classroom talk. Target 650 to 850 spoken words.",
   beginner:
-    "Use simple everyday English: mostly short sentences, explain important terms, and repeat key ideas naturally. Target 850 to 1000 spoken words.",
+    "Use English at a Japanese junior high school level: simple everyday vocabulary, mostly short sentences, basic grammar, and careful explanations of any new terms. Keep the conversation natural but avoid advanced expressions. Target 850 to 1000 spoken words.",
   intermediate:
-    "Use natural but accessible English: explain specialized terms once and vary sentence length moderately. Target 1050 to 1200 spoken words.",
+    "Use English at a Japanese high school to university student level: natural but accessible vocabulary, some longer sentences, and clear explanations of specialized terms. Allow moderate academic or news-style expressions, but keep the conversation easy to follow. Target 1050 to 1200 spoken words.",
   advanced:
-    "Use fluent, nuanced English with precise vocabulary and only brief explanations for specialized terms. Target 1200 to 1400 spoken words.",
+    "Use English around the Eiken Grade 2 to Grade 1 range: fluent and nuanced, with precise vocabulary, idioms used sparingly, and only brief explanations for specialized terms. Make it challenging but still useful for advanced learners. Target 1200 to 1400 spoken words.",
   native:
     "Use natural native-level radio English with nuance, idioms where appropriate, and a lively pace. Target 1350 to 1550 spoken words.",
 };

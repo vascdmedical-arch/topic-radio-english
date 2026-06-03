@@ -144,5 +144,9 @@ test("asks for a casual current radio show with Japanese interface text", () => 
   assert.match(prompt, /natural Japanese translation/);
   assert.match(prompt, /60-minute show/);
   assert.match(prompt, /installment 2/);
+  assert.match(prompt, /Japanese junior high school level/);
+  assert.match(buildPrompt("coffee", "starter"), /young child's everyday conversation level/);
+  assert.match(buildPrompt("coffee", "intermediate"), /Japanese high school to university student level/);
+  assert.match(buildPrompt("coffee", "advanced"), /Eiken Grade 2 to Grade 1 range/);
   assert.match(mockEpisode("coffee", "starter").title, /を楽しくキャッチアップ/);
 });
