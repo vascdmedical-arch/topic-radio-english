@@ -2,6 +2,7 @@ services:
   - type: web
     name: topic-radio-english
     runtime: node
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/status
