@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f1e8" />
+    <title>Topic Radio</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="トピックラジオ ホーム">
+        <span class="brand-mark">TR</span>
+        <span>トピックラジオ</span>
+      </a>
+      <div class="api-state" id="apiState">
+        <span class="state-dot"></span>
+        <span>接続を確認中</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">気になる話題で、英語に耳を慣らそう</p>
+          <h1>知りたいことを、<br /><em>英語ラジオで。</em></h1>
+          <p class="hero-text">
+            テーマをひとつ選ぶだけ。最新情報を調べて、2人のホストが
+            カジュアルな英語トークで楽しくお届けします。
+          </p>
+        </div>
+
+        <form class="studio-card" id="studioForm">
+          <div class="card-heading">
+            <span class="live-pill"><span></span> 新しい番組をつくる</span>
+            <p id="durationNote">通常速度で約10分</p>
+          </div>
+
+          <label class="field">
+            <span>どんなテーマを知りたいですか？</span>
+            <textarea
+              id="topic"
+              name="topic"
+              rows="3"
+              maxlength="180"
+              placeholder="例：最近の生成AIニュース、旅行先の歴史、宇宙開発の最新情報"
+              required
+            ></textarea>
+          </label>
+
+          <fieldset class="level-fieldset">
+            <legend>英語レベル</legend>
+            <div class="level-grid" id="levelGrid">
+              <label><input type="radio" name="level" value="starter" /><span>超初心者</span></label>
+              <label><input type="radio" name="level" value="beginner" checked /><span>初心者</span></label>
+              <label><input type="radio" name="level" value="intermediate" /><span>中級</span></label>
+              <label><input type="radio" name="level" value="advanced" /><span>上級</span></label>
+              <label><input type="radio" name="level" value="native" /><span>ネイティブ</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="duration-fieldset">
+            <legend>番組の長さ</legend>
+            <div class="duration-grid">
+              <label><input type="radio" name="duration" value="10" checked /><span>10分</span></label>
+              <label><input type="radio" name="duration" value="30" /><span>30分</span></label>
+              <label><input type="radio" name="duration" value="60" /><span>1時間</span></label>
+              <label><input type="radio" name="duration" value="continuous" /><span>継続</span></label>
+            </div>
+            <p class="duration-help" id="durationHelp">気軽に聴ける短めの番組です。</p>
+          </fieldset>
+
+          <button class="generate-button" id="generateButton" type="submit">
+            <span>英語ラジオをつくる</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <p class="form-note">番組ではAI音声を使用します。</p>
+        </form>
+      </section>
+
+      <section class="episode-shell is-hidden" id="episodeShell" aria-live="polite">
+        <div class="episode-main">
+          <div class="episode-kicker">
+            <span class="on-air">オンエア</span>
+            <span id="episodeLevel">初心者向け英語</span>
+            <span id="episodeDuration">10分番組</span>
+          </div>
+          <h2 id="episodeTitle"></h2>
+          <p class="episode-dek" id="episodeDek"></p>
+
+          <div class="player-card">
+            <div class="hosts" aria-label="ホストのMayaとBen">
+              <div class="host maya">
+                <div class="avatar">M</div>
+                <div><strong>Maya</strong><span>ホスト</span></div>
+              </div>
+              <div class="signal" aria-hidden="true">
+                <i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <div class="host ben">
+                <div class="avatar">B</div>
+                <div><strong>Ben</strong><span>ホスト</span></div>
+              </div>
+            </div>
+
+            <div class="player-controls">
+              <button class="play-button" id="playButton" type="button" aria-label="番組を再生">
+                <span id="playIcon">▶</span>
+              </button>
+              <div class="player-info">
+                <div class="now-playing">
+                  <span id="nowSpeaker">再生できます</span>
+                  <span id="timeEstimate">約10分</span>
+                </div>
+                <div class="progress-track"><span id="progressBar"></span></div>
+              </div>
+            </div>
+
+            <div class="player-settings">
+              <div class="speed-control">
+                <label for="speed">再生速度</label>
+                <input id="speed" type="range" min="0.5" max="2" step="0.25" value="1" />
+                <output id="speedValue" for="speed">x1.0</output>
+              </div>
+              <div class="bgm-control">
+                <button class="bgm-toggle is-on" id="bgmToggle" type="button" aria-pressed="true">
+                  <span aria-hidden="true">♫</span>
+                  <span id="bgmLabel">BGM オン</span>
+                </button>
+                <label for="bgmVolume">BGM音量</label>
+                <input id="bgmVolume" type="range" min="0" max="0.3" step="0.02" value="0.08" />
+              </div>
+              <div class="bgm-mood-control">
+                <span>BGM気分</span>
+                <div class="bgm-mood-grid" role="group" aria-label="BGMの気分">
+                  <button class="bgm-mood-button is-active" type="button" data-bgm-mood="lively" aria-pressed="true">軽快</button>
+                  <button class="bgm-mood-button" type="button" data-bgm-mood="relaxed" aria-pressed="false">リラックス</button>
+                  <button class="bgm-mood-button" type="button" data-bgm-mood="happy" aria-pressed="false">ハッピー</button>
+                  <button class="bgm-mood-button" type="button" data-bgm-mood="energetic" aria-pressed="false">エネルギッシュ</button>
+                </div>
+              </div>
+              <p class="bgm-help">10分ごとのパートに入るタイミングで、同じ気分の曲が交互に切り替わります。</p>
+              <p class="bgm-credit" id="bgmCredit">
+                BGM:
+                <a id="bgmTrackLink" href="https://mixkit.co/free-stock-music/mood/lively/" target="_blank" rel="noreferrer">Upbeat Jazz</a>
+                <span id="bgmTrackMeta">/ Francisco Alvear · 軽快 · パート1 · Mixkit</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="transcript-heading">
+            <div>
+              <p class="eyebrow" id="transcriptEyebrow">英語を目で追いながら聴く</p>
+              <h3 id="transcriptTitle">英語トランスクリプト</h3>
+            </div>
+            <div class="transcript-actions">
+              <div class="language-switch" role="group" aria-label="字幕の言語">
+                <button class="language-button is-active" id="showEnglishButton" type="button" aria-pressed="true">英語</button>
+                <button class="language-button" id="showJapaneseButton" type="button" aria-pressed="false">日本語</button>
+              </div>
+              <button class="text-button" id="restartButton" type="button">↺ 最初から聴く</button>
+            </div>
+          </div>
+          <div class="transcript" id="transcript"></div>
+          <button class="load-more-button is-hidden" id="loadMoreButton" type="button">次の10分を準備する</button>
+        </div>
+
+        <aside class="sources-panel">
+          <p class="eyebrow">番組のリサーチノート</p>
+          <h3>参考にしたWeb情報</h3>
+          <p class="sources-intro">
+            最新のオンライン情報をもとに番組を作成します。気になるリンクから詳しく読めます。
+          </p>
+          <div class="sources-list" id="sourcesList"></div>
+        </aside>
+      </section>
+    </main>
+
+    <div class="toast is-hidden" id="toast" role="status"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

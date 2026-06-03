@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: topic-radio-english
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_SCRIPT_MODEL
+        value: gpt-5.4-mini
+      - key: OPENAI_TTS_MODEL
+        value: gpt-4o-mini-tts
