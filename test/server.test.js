@@ -95,6 +95,18 @@ test("serves the bundled free background music tracks as audio", async () => {
   });
 });
 
+test("serves mobile-friendly wrapping styles", async () => {
+  await withServer(async (baseUrl) => {
+    const cookie = await loginCookie(baseUrl);
+    const response = await fetch(`${baseUrl}/styles.css`, { headers: { Cookie: cookie } });
+    const css = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(css, /overflow-wrap: anywhere/);
+    assert.match(css, /grid-template-columns: 1fr/);
+    assert.match(css, /duration-grid/);
+  });
+});
+
 test("creates a preview episode when no API key is present", async () => {
   const previous = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;

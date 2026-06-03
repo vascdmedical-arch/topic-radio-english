@@ -23,10 +23,13 @@ body {
     radial-gradient(circle at 5% 0%, rgba(238, 213, 132, 0.4), transparent 24rem),
     linear-gradient(180deg, #f7f2e9, #f3eee5);
   font-family: "Noto Sans JP", "DM Sans", Arial, sans-serif;
+  overflow-x: hidden;
 }
 
 button, textarea, input { font: inherit; }
 button { cursor: pointer; }
+main, section, article, aside, div, p, h1, h2, h3 { min-width: 0; }
+p, h1, h2, h3, a, button, span { overflow-wrap: anywhere; }
 
 .topbar {
   height: 76px;
@@ -259,7 +262,7 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
 .line.active { border-left-color: var(--orange); background: rgba(255,253,248,.7); }
 .line-speaker { padding-top: 3px; color: var(--orange); font-family: "DM Mono"; font-size: 11px; font-weight: 500; letter-spacing: .07em; text-transform: uppercase; }
 .line.ben .line-speaker { color: #35806e; }
-.line p { margin: 0; color: #38534e; line-height: 1.65; }
+.line p { min-width: 0; margin: 0; color: #38534e; line-height: 1.65; overflow-wrap: anywhere; }
 .load-more-button { width: 100%; margin-top: 18px; padding: 13px; color: var(--ink); border: 1px solid var(--mint-strong); border-radius: 9px; background: rgba(204,231,220,.62); font-size: 13px; font-weight: 700; }
 .load-more-button:hover { background: var(--mint); }
 .load-more-button:disabled { cursor: wait; opacity: .68; }
@@ -292,16 +295,32 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .sources-panel { position: static; }
 }
 @media (max-width: 520px) {
-  .hero h1 { font-size: 56px; }
+  .hero { padding: 48px 0; }
+  .hero h1 { font-size: clamp(42px, 13vw, 56px); letter-spacing: -.07em; }
+  .hero-text { font-size: 16px; }
   .topbar { padding: 0 18px; }
   main { padding-inline: 18px; }
   .api-state { max-width: 130px; text-align: right; }
+  .studio-card { padding: 22px 18px; border-radius: 18px; }
+  .card-heading { display: block; }
+  .card-heading p { margin-top: 8px; }
+  .duration-grid { grid-template-columns: repeat(2, 1fr); }
+  .episode-kicker { flex-wrap: wrap; }
+  .episode-main h2 { font-size: clamp(32px, 10vw, 42px); letter-spacing: -.05em; }
   .hosts { gap: 12px; }
   .signal { display: none; }
+  .player-controls { gap: 14px; padding: 20px 16px 15px; }
+  .play-button { width: 48px; height: 48px; }
+  .now-playing { flex-wrap: wrap; }
   .player-settings { padding-left: 24px; }
+  .speed-control, .bgm-control { flex-wrap: wrap; }
+  .bgm-control label { margin-left: 0; }
+  .bgm-control input { width: 100%; }
   .bgm-mood-control { grid-template-columns: 1fr; }
   .bgm-mood-grid { grid-template-columns: repeat(2, 1fr); }
+  .bgm-help, .bgm-credit { text-align: left; }
   .transcript-heading { display: block; }
-  .transcript-actions { justify-content: space-between; margin-top: 14px; }
-  .line { grid-template-columns: 58px 1fr; padding-inline: 5px; }
+  .transcript-actions { flex-wrap: wrap; justify-content: flex-start; margin-top: 14px; }
+  .line { grid-template-columns: 1fr; gap: 6px; padding-inline: 8px; }
+  .line-speaker { padding-top: 0; }
 }
