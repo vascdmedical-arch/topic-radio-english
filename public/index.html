@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f6f1e8" />
     <title>Topic Radio</title>
-    <link rel="stylesheet" href="/styles.css?v=20260618-3" />
+    <link rel="stylesheet" href="/styles.css?v=20260618-4" />
   </head>
   <body>
     <header class="topbar">
@@ -47,6 +47,12 @@
               required
             ></textarea>
           </label>
+          <div class="quick-actions">
+            <button class="today-news-button" id="todayNewsButton" type="button">
+              今日のニュース
+            </button>
+            <p>Yahoo!ニュース日本版のヘッドラインから、幅広い話題で番組を作ります。</p>
+          </div>
 
           <fieldset class="level-fieldset">
             <legend>英語レベル</legend>
@@ -119,7 +125,7 @@
             <div class="player-settings">
               <div class="speed-control">
                 <label for="speed">再生速度</label>
-                <input id="speed" type="range" min="0.5" max="2" step="0.25" value="1" />
+                <input id="speed" type="range" min="0.5" max="2" step="0.1" value="1" />
                 <output id="speedValue" for="speed">x1.0</output>
               </div>
               <div class="bgm-control">
@@ -137,6 +143,7 @@
                   <button class="bgm-mood-button" type="button" data-bgm-mood="relaxed" aria-pressed="false">リラックス</button>
                   <button class="bgm-mood-button" type="button" data-bgm-mood="happy" aria-pressed="false">ハッピー</button>
                   <button class="bgm-mood-button" type="button" data-bgm-mood="energetic" aria-pressed="false">エネルギッシュ</button>
+                  <button class="bgm-mood-button" type="button" data-bgm-mood="mix" aria-pressed="false">おまかせ</button>
                 </div>
               </div>
               <p class="bgm-help">10分ごとのパートに入るタイミングで、同じ気分の曲が交互に切り替わります。</p>
@@ -156,7 +163,7 @@
             <div class="transcript-actions">
               <div class="language-switch" role="group" aria-label="字幕の言語">
                 <button class="language-button is-active" id="showEnglishButton" type="button" aria-pressed="true">英語</button>
-                <button class="language-button" id="showJapaneseButton" type="button" aria-pressed="false">日本語</button>
+                <button class="language-button" id="showJapaneseButton" type="button" aria-pressed="false">英日併記</button>
               </div>
               <button class="text-button" id="restartButton" type="button">↺ 最初から聴く</button>
             </div>
@@ -177,6 +184,6 @@
     </main>
 
     <div class="toast is-hidden" id="toast" role="status"></div>
-    <script type="module" src="/app.js?v=20260618-3"></script>
+    <script type="module" src="/app.js?v=20260618-4"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import test from "node:test";
-import { buildPrompt, createServer, mockEpisode, validateEpisode } from "../server.js";
+import { buildPrompt, buildYahooNewsTopic, createServer, mockEpisode, parseYahooRss, validateEpisode } from "../server.js";
 
 async function withServer(run) {
   const server = createServer();
@@ -61,8 +61,11 @@ test("serves the app shell after login", async () => {
     assert.match(html, /Topic Radio/);
     assert.match(html, /BGM気分/);
     assert.match(html, /10分ごとのパート/);
-    assert.match(html, /styles\.css\?v=20260618-3/);
-    assert.match(html, /app\.js\?v=20260618-3/);
+    assert.match(html, /今日のニュース/);
+    assert.match(html, /英日併記/);
+    assert.match(html, /step="0\.1"/);
+    assert.match(html, /styles\.css\?v=20260618-4/);
+    assert.match(html, /app\.js\?v=20260618-4/);
   });
 });
 
@@ -113,6 +116,38 @@ test("serves mobile-friendly wrapping styles", async () => {
   });
 });
 
+test("parses Yahoo Japan headlines and serves them through the API", async () => {
+  const originalFetch = globalThis.fetch;
+  const rss = `<?xml version="1.0" encoding="UTF-8"?>
+    <rss><channel>
+      <item><title>科学の新発見 &amp; 生活への影響</title><link>https://news.yahoo.co.jp/pickup/1?source=rss</link><pubDate>Thu, 18 Jun 2026 09:00:00 GMT</pubDate></item>
+      <item><title>スポーツ大会が開幕</title><link>https://news.yahoo.co.jp/pickup/2?source=rss</link><pubDate>Thu, 18 Jun 2026 09:10:00 GMT</pubDate></item>
+    </channel></rss>`;
+  assert.deepEqual(parseYahooRss(rss, "科学").map((item) => item.title), [
+    "科学の新発見 & 生活への影響",
+    "スポーツ大会が開幕",
+  ]);
+  globalThis.fetch = async (url, init) => {
+    if (String(url).startsWith("https://news.yahoo.co.jp/")) {
+      return new Response(rss, { status: 200, headers: { "Content-Type": "application/xml" } });
+    }
+    return originalFetch(url, init);
+  };
+  try {
+    await withServer(async (baseUrl) => {
+      const cookie = await loginCookie(baseUrl);
+      const response = await fetch(`${baseUrl}/api/yahoo-headlines`, { headers: { Cookie: cookie } });
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.match(payload.topic, /Yahoo!ニュース日本版ヘッドライン/);
+      assert.ok(payload.items.length >= 2);
+      assert.match(payload.sources[0].url, /^https:\/\/news\.yahoo\.co\.jp\//);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("creates a preview episode when no API key is present", async () => {
   const previous = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
@@ -122,7 +157,12 @@ test("creates a preview episode when no API key is present", async () => {
       const response = await fetch(`${baseUrl}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: cookie },
-        body: JSON.stringify({ topic: "urban gardening", level: "beginner", duration: "30" }),
+        body: JSON.stringify({
+          topic: "urban gardening",
+          level: "beginner",
+          duration: "30",
+          newsItems: [{ title: "科学の新発見", link: "https://news.yahoo.co.jp/pickup/1", category: "科学" }],
+        }),
       });
       const payload = await response.json();
       assert.equal(response.status, 200);
@@ -133,6 +173,7 @@ test("creates a preview episode when no API key is present", async () => {
       assert.equal(payload.duration, "30");
       assert.equal(payload.target_minutes, 30);
       assert.equal(payload.has_more, true);
+      assert.match(payload.sources[0].title, /Yahoo!ニュース/);
     });
   } finally {
     if (previous) process.env.OPENAI_API_KEY = previous;
@@ -197,9 +238,13 @@ test("validates generated dialogue", () => {
 });
 
 test("asks for a casual current radio show with Japanese interface text", () => {
-  const prompt = buildPrompt("coffee", "beginner", { duration: "60", part: 2 });
+  const newsItems = [{ title: "科学の新発見", link: "https://news.yahoo.co.jp/pickup/1", category: "科学" }];
+  const prompt = buildPrompt("coffee", "beginner", { duration: "60", part: 2, newsItems });
   assert.match(prompt, /latest supported developments/);
   assert.match(prompt, /friendly jokes/);
+  assert.match(prompt, /snappy/);
+  assert.match(prompt, /do not let economics dominate/);
+  assert.match(prompt, /Yahoo! JAPAN headline set/);
   assert.match(prompt, /title, dek, and level_summary in natural Japanese/);
   assert.match(prompt, /natural Japanese translation/);
   assert.match(prompt, /60-minute show/);
@@ -208,5 +253,6 @@ test("asks for a casual current radio show with Japanese interface text", () => 
   assert.match(buildPrompt("coffee", "starter"), /very common words a child would know/);
   assert.match(buildPrompt("coffee", "intermediate"), /Japanese high school to university student level/);
   assert.match(buildPrompt("coffee", "advanced"), /Eiken Grade 2 to Grade 1 range/);
+  assert.match(buildYahooNewsTopic(newsItems, "2026年6月18日木曜日"), /科学/);
   assert.match(mockEpisode("coffee", "starter").title, /を楽しくキャッチアップ/);
 });

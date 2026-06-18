@@ -14,6 +14,15 @@ const AUTH_COOKIE = "topic_radio_auth";
 const LEVELS = new Set(["starter", "beginner", "intermediate", "advanced", "native"]);
 const DURATIONS = new Set(["10", "30", "60", "continuous"]);
 const SPEAKERS = new Set(["Maya", "Ben"]);
+const YAHOO_NEWS_FEEDS = [
+  ["主要", "https://news.yahoo.co.jp/rss/topics/top-picks.xml"],
+  ["国内", "https://news.yahoo.co.jp/rss/topics/domestic.xml"],
+  ["国際", "https://news.yahoo.co.jp/rss/topics/world.xml"],
+  ["IT", "https://news.yahoo.co.jp/rss/topics/it.xml"],
+  ["科学", "https://news.yahoo.co.jp/rss/topics/science.xml"],
+  ["エンタメ", "https://news.yahoo.co.jp/rss/topics/entertainment.xml"],
+  ["スポーツ", "https://news.yahoo.co.jp/rss/topics/sports.xml"],
+];
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -77,7 +86,96 @@ function episodeMetadata(duration, part, demo = false) {
   };
 }
 
-export function buildPrompt(topic, level, { duration = "10", part = 1, previousLines = [] } = {}) {
+function todayInJapan(date = new Date()) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(date);
+}
+
+function decodeXml(value = "") {
+  return String(value)
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
+}
+
+export function parseYahooRss(xml, category = "主要") {
+  const items = [];
+  for (const match of String(xml).matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const itemXml = match[1];
+    const title = decodeXml(itemXml.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.trim() || "");
+    const link = decodeXml(itemXml.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim() || "");
+    const pubDate = decodeXml(itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() || "");
+    if (title && link) items.push({ title, link, pubDate, category });
+  }
+  return items;
+}
+
+function normalizeNewsItems(value) {
+  if (!Array.isArray(value)) return [];
+  const unique = new Map();
+  for (const raw of value) {
+    const title = String(raw?.title || "").trim().slice(0, 120);
+    const link = String(raw?.link || raw?.url || "").trim();
+    const category = String(raw?.category || "ニュース").trim().slice(0, 24);
+    const pubDate = String(raw?.pubDate || "").trim().slice(0, 80);
+    if (!title || !link || !/^https:\/\/news\.yahoo\.co\.jp\//.test(link)) continue;
+    if (!unique.has(link)) unique.set(link, { title, link, category, pubDate });
+  }
+  return [...unique.values()].slice(0, 18);
+}
+
+function newsItemsToSources(newsItems = []) {
+  return newsItems.map((item) => ({
+    title: `Yahoo!ニュース（${item.category}）: ${item.title}`,
+    url: item.link,
+  }));
+}
+
+export function buildYahooNewsTopic(newsItems = [], dateLabel = todayInJapan()) {
+  const categories = [...new Set(newsItems.map((item) => item.category))].slice(0, 7).join("・");
+  return `${dateLabel}のYahoo!ニュース日本版ヘッドラインを、${categories || "主要ニュース"}から幅広くカジュアルに紹介`;
+}
+
+async function fetchYahooFeed(category, url) {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "TopicRadioEnglish/1.0 (+https://topic-radio-english.onrender.com)",
+      Accept: "application/rss+xml, application/xml, text/xml",
+    },
+  });
+  if (!response.ok) {
+    throw new HttpError(502, "Yahoo!ニュースの見出しを取得できませんでした。少し時間をおいてお試しください。");
+  }
+  return parseYahooRss(await response.text(), category);
+}
+
+export async function fetchYahooHeadlines() {
+  const settled = await Promise.allSettled(
+    YAHOO_NEWS_FEEDS.map(([category, url]) => fetchYahooFeed(category, url)),
+  );
+  const byCategory = settled.flatMap((result) => result.status === "fulfilled" ? result.value.slice(0, 3) : []);
+  const unique = normalizeNewsItems(byCategory);
+  if (!unique.length) {
+    throw new HttpError(502, "Yahoo!ニュースの見出しを取得できませんでした。少し時間をおいてお試しください。");
+  }
+  const items = unique.slice(0, 14);
+  return {
+    fetchedAt: new Date().toISOString(),
+    topic: buildYahooNewsTopic(items),
+    items,
+    sources: newsItemsToSources(items),
+  };
+}
+
+export function buildPrompt(topic, level, { duration = "10", part = 1, previousLines = [], newsItems = [] } = {}) {
   const totalParts = totalPartsFor(duration);
   const isFinalPart = duration !== "continuous" && part >= totalParts;
   const partPosition =
@@ -96,6 +194,12 @@ export function buildPrompt(topic, level, { duration = "10", part = 1, previousL
         .map((line) => `${line.speaker}: ${line.text}`)
         .join("\n")}`
     : "";
+  const headlineContext = newsItems.length
+    ? `Today's Yahoo! JAPAN headline set, gathered from the Japanese Yahoo! News topics RSS feeds on ${todayInJapan()}:
+${newsItems.map((item, index) => `${index + 1}. [${item.category}] ${item.title}`).join("\n")}
+
+Use these headlines as the main source of story ideas. Cover a balanced mix across categories rather than spending most of the show on economics or markets. For sensitive headlines involving crime, accidents, disasters, illness, war, or death, keep the tone calm and factual, and do not joke about them.`
+    : "";
 
   return `Create a roughly 10-minute English learning radio installment about: "${topic}".
 
@@ -105,13 +209,14 @@ ${ending}
 ${context}
 
 Research the topic on the live web before writing. Prioritize reliable recent information and compare publication dates so the segment reflects the latest supported developments. If the topic is timeless, still search for credible sources and find a current angle. The listener wants to hear useful updates and interesting facts while practicing English.
+${headlineContext}
 
-The hosts are Maya and Ben. Maya is a warm, curious female host. Ben is a thoughtful, upbeat male host. Make it sound like a lively, casual radio show or podcast, not a textbook lesson or a formal lecture. Let the hosts react to the news, ask each other natural follow-up questions, and mention surprising details. Add a few easy, friendly jokes or playful reactions when appropriate. Never force jokes, invent facts for humor, or joke about tragedy, health risks, disasters, or other sensitive subjects. Alternate speakers often, but allow an occasional second turn by the same host when natural. Include an inviting opening, 3 to 5 conversational beats, a short recap, and a friendly closing.
+The hosts are Maya and Ben. Maya is a warm, curious female host. Ben is a thoughtful, upbeat male host. Make it sound like a lively, casual radio show or podcast, not a textbook lesson or a formal lecture. Keep the rhythm snappy: shorter turns, quick handoffs, small reactions, and a bright morning-radio feel. Let the hosts react to the news, ask each other natural follow-up questions, and mention surprising details. Add a few easy, friendly jokes or playful reactions when appropriate. Never force jokes, invent facts for humor, or joke about tragedy, health risks, disasters, illness, war, death, or other sensitive subjects. Unless the user's topic is explicitly economic, do not let economics dominate; include a broader mix such as science, technology, culture, daily life, sports, travel, education, environment, and human-interest angles when relevant. Alternate speakers often, but allow an occasional second turn by the same host when natural. Include an inviting opening, 4 to 6 fast conversational beats, a short recap, and a friendly closing.
 
 English level instructions:
 ${LEVEL_GUIDE[level]}
 
-Write title, dek, and level_summary in natural Japanese for the app interface. Write every spoken line in English only. For every spoken line, also provide a natural Japanese translation in the translation field. Keep each individual English turn under 650 characters so it can be synthesized as speech. Do not include URLs, markdown, stage directions, citation markers, or source lists inside the spoken lines. Return only the requested structured data.`;
+Write title, dek, and level_summary in natural Japanese for the app interface. Write every spoken line in English only. For every spoken line, also provide a natural Japanese translation in the translation field. Keep each individual English turn under 520 characters so it can be synthesized as speech and feel conversational. Do not include URLs, markdown, stage directions, citation markers, or source lists inside the spoken lines. Return only the requested structured data.`;
 }
 
 export function validateEpisode(episode) {
@@ -166,14 +271,14 @@ function demoContinuationLines(part) {
   ].map(([speaker, text, translation]) => ({ speaker, text, translation }));
 }
 
-export function mockEpisode(topic, level, duration = "10", part = 1) {
+export function mockEpisode(topic, level, duration = "10", part = 1, newsItems = []) {
   return {
     title: part === 1 ? `${topic}を楽しくキャッチアップ` : `${topic}をもっと深掘り`,
     dek: "プレビュー番組です。APIキーを設定すると、選択した長さに合わせて最新情報を調べながら英語ラジオを生成します。",
     level_summary: `${level}向けのリスニング体験をプレビュー中`,
     estimated_minutes: 2,
     lines: part === 1 ? demoLines() : demoContinuationLines(part),
-    sources: [],
+    sources: newsItemsToSources(normalizeNewsItems(newsItems)),
     demo: true,
     ...episodeMetadata(duration, part, true),
   };
@@ -344,6 +449,10 @@ function requirePreviousLines(value) {
   });
 }
 
+function requireNewsItems(value) {
+  return normalizeNewsItems(value);
+}
+
 function requireSpeechRequest(body) {
   const speaker = String(body.speaker || "");
   const text = String(body.text || "").trim();
@@ -411,9 +520,10 @@ function collectSources(response) {
   return [...unique.values()].slice(0, 12);
 }
 
-async function generateEpisode(topic, level, { duration = "10", part = 1, previousLines = [] } = {}) {
+async function generateEpisode(topic, level, { duration = "10", part = 1, previousLines = [], newsItems = [] } = {}) {
+  const normalizedNewsItems = normalizeNewsItems(newsItems);
   if (!process.env.OPENAI_API_KEY) {
-    return mockEpisode(topic, level, duration, part);
+    return mockEpisode(topic, level, duration, part, normalizedNewsItems);
   }
   const apiResponse = await callOpenAI("responses", {
     method: "POST",
@@ -422,7 +532,7 @@ async function generateEpisode(topic, level, { duration = "10", part = 1, previo
       tools: [{ type: "web_search", search_context_size: "medium" }],
       tool_choice: "auto",
       include: ["web_search_call.action.sources"],
-      input: buildPrompt(topic, level, { duration, part, previousLines }),
+      input: buildPrompt(topic, level, { duration, part, previousLines, newsItems: normalizedNewsItems }),
       text: {
         format: {
           type: "json_schema",
@@ -447,10 +557,18 @@ async function generateEpisode(topic, level, { duration = "10", part = 1, previo
   }
   return {
     ...validateEpisode(episode),
-    sources: collectSources(raw),
+    sources: mergeServerSources(newsItemsToSources(normalizedNewsItems), collectSources(raw)),
     demo: false,
     ...episodeMetadata(duration, part),
   };
+}
+
+function mergeServerSources(...sourceLists) {
+  const unique = new Map();
+  for (const source of sourceLists.flat()) {
+    if (source?.url && !unique.has(source.url)) unique.set(source.url, source);
+  }
+  return [...unique.values()].slice(0, 18);
 }
 
 async function synthesizeSpeech({ speaker, text, speed }) {
@@ -532,12 +650,15 @@ export function createServer() {
           ttsModel: TTS_MODEL,
         });
       }
+      if (req.method === "GET" && url.pathname === "/api/yahoo-headlines") {
+        return json(res, 200, await fetchYahooHeadlines());
+      }
       if (req.method === "POST" && url.pathname === "/api/generate") {
         const body = await readJson(req);
         const episode = await generateEpisode(
           requireTopic(body.topic),
           requireLevel(body.level),
-          { duration: requireDuration(body.duration) },
+          { duration: requireDuration(body.duration), newsItems: requireNewsItems(body.newsItems) },
         );
         return json(res, 200, episode);
       }
@@ -550,6 +671,7 @@ export function createServer() {
             duration: requireDuration(body.duration),
             part: requirePart(body.part),
             previousLines: requirePreviousLines(body.previousLines),
+            newsItems: requireNewsItems(body.newsItems),
           },
         );
         return json(res, 200, episode);

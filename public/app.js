@@ -58,12 +58,19 @@ const BGM_TRACKS = {
     },
   ],
 };
+BGM_TRACKS.mix = [
+  ...BGM_TRACKS.lively,
+  ...BGM_TRACKS.relaxed,
+  ...BGM_TRACKS.happy,
+  ...BGM_TRACKS.energetic,
+];
 
 const BGM_MOOD_LABELS = {
   lively: "軽快",
   relaxed: "リラックス",
   happy: "ハッピー",
   energetic: "エネルギッシュ",
+  mix: "おまかせ",
 };
 
 const state = {
@@ -78,6 +85,7 @@ const state = {
   demoMode: false,
   transcriptLanguage: "en",
   topic: "",
+  newsItems: [],
   level: "beginner",
   duration: "10",
   continuePromise: null,
@@ -86,6 +94,7 @@ const state = {
   bgmAudio: null,
   bgmMood: "lively",
   bgmTrack: null,
+  bgmPartTracks: new Map(),
   currentPlaybackPart: 1,
   partStarts: [],
 };
@@ -119,6 +128,7 @@ const els = {
   speed: $("#speed"),
   speedValue: $("#speedValue"),
   timeEstimate: $("#timeEstimate"),
+  todayNewsButton: $("#todayNewsButton"),
   toast: $("#toast"),
   topic: $("#topic"),
   transcript: $("#transcript"),
@@ -209,9 +219,18 @@ function renderTranscript(lines) {
       const speaker = document.createElement("span");
       speaker.className = "line-speaker";
       speaker.textContent = line.speaker;
+      const textWrap = document.createElement("div");
       const text = document.createElement("p");
-      text.textContent = state.transcriptLanguage === "ja" ? line.translation : line.text;
-      item.append(speaker, text);
+      text.className = "line-text";
+      text.textContent = line.text;
+      textWrap.append(text);
+      if (state.transcriptLanguage === "both") {
+        const translation = document.createElement("p");
+        translation.className = "line-translation";
+        translation.textContent = line.translation;
+        textWrap.append(translation);
+      }
+      item.append(speaker, textWrap);
       return item;
     }),
   );
@@ -219,13 +238,13 @@ function renderTranscript(lines) {
 
 function setTranscriptLanguage(language) {
   state.transcriptLanguage = language;
-  const isJapanese = language === "ja";
-  els.showEnglishButton.classList.toggle("is-active", !isJapanese);
-  els.showEnglishButton.setAttribute("aria-pressed", String(!isJapanese));
-  els.showJapaneseButton.classList.toggle("is-active", isJapanese);
-  els.showJapaneseButton.setAttribute("aria-pressed", String(isJapanese));
-  els.transcriptEyebrow.textContent = isJapanese ? "内容を日本語で確認する" : "英語を目で追いながら聴く";
-  els.transcriptTitle.textContent = isJapanese ? "日本語訳" : "英語トランスクリプト";
+  const isBoth = language === "both";
+  els.showEnglishButton.classList.toggle("is-active", !isBoth);
+  els.showEnglishButton.setAttribute("aria-pressed", String(!isBoth));
+  els.showJapaneseButton.classList.toggle("is-active", isBoth);
+  els.showJapaneseButton.setAttribute("aria-pressed", String(isBoth));
+  els.transcriptEyebrow.textContent = isBoth ? "英語と日本語を並べて確認する" : "英語を目で追いながら聴く";
+  els.transcriptTitle.textContent = isBoth ? "英日併記トランスクリプト" : "英語トランスクリプト";
   if (state.episode) {
     renderTranscript(state.episode.lines);
     updateProgress();
@@ -289,8 +308,15 @@ function tracksForMood(mood = state.bgmMood) {
 
 function bgmTrackForPart(part = state.currentPlaybackPart || 1) {
   const tracks = tracksForMood();
-  const index = Math.max(0, Number(part || 1) - 1) % tracks.length;
-  return tracks[index];
+  const key = `${state.bgmMood}:${Number(part || 1)}`;
+  if (state.bgmPartTracks.has(key)) return state.bgmPartTracks.get(key);
+  let track = tracks[Math.floor(Math.random() * tracks.length)] || tracks[0];
+  if (tracks.length > 1 && state.bgmTrack?.src === track.src) {
+    const alternatives = tracks.filter((candidate) => candidate.src !== state.bgmTrack.src);
+    track = alternatives[Math.floor(Math.random() * alternatives.length)] || track;
+  }
+  state.bgmPartTracks.set(key, track);
+  return track;
 }
 
 function currentPartForLine(index = state.index) {
@@ -366,6 +392,7 @@ function renderEpisode(episode, level) {
   state.currentPlaybackPart = Number(episode.part || 1);
   state.partStarts = [{ part: state.currentPlaybackPart, index: 0 }];
   state.audioCache.clear();
+  state.bgmPartTracks.clear();
   els.episodeTitle.textContent = episode.title;
   els.episodeDek.textContent = episode.dek;
   els.episodeLevel.textContent = `${levelLabel(level)}向け英語`;
@@ -379,6 +406,58 @@ function renderEpisode(episode, level) {
   els.nowSpeaker.textContent = episode.demo ? "プレビューを再生できます" : "番組を再生できます";
   els.episodeShell.classList.remove("is-hidden");
   els.episodeShell.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function generateEpisodeFromSelection({ newsItems = [], topic = els.topic.value.trim(), sourceLabel = "" } = {}) {
+  stopPlayback({ reset: true });
+  const token = ++state.episodeToken;
+  state.topic = topic;
+  state.newsItems = Array.isArray(newsItems) ? newsItems : [];
+  state.continuePromise = null;
+  els.generateButton.disabled = true;
+  els.todayNewsButton.disabled = true;
+  els.generateButton.firstElementChild.textContent = sourceLabel || "最新情報を調べて番組を準備中…";
+  try {
+    const response = await api("/api/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        topic: state.topic,
+        level: selectedLevel(),
+        duration: selectedDuration(),
+        newsItems: state.newsItems,
+      }),
+    });
+    const episode = await response.json();
+    if (token !== state.episodeToken) return;
+    renderEpisode(episode, selectedLevel());
+    if (episode.demo) showToast("プレビューモードです。APIキーを設定すると、最新のWeb情報とAI音声で番組を作成します。");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    els.generateButton.disabled = false;
+    els.todayNewsButton.disabled = false;
+    els.generateButton.firstElementChild.textContent = "英語ラジオをつくる";
+  }
+}
+
+async function generateTodayNewsEpisode() {
+  els.todayNewsButton.disabled = true;
+  els.todayNewsButton.textContent = "見出しを取得中…";
+  try {
+    const response = await api("/api/yahoo-headlines");
+    const payload = await response.json();
+    els.topic.value = payload.topic;
+    await generateEpisodeFromSelection({
+      topic: payload.topic,
+      newsItems: payload.items,
+      sourceLabel: "Yahoo!ニュースから番組を準備中…",
+    });
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    els.todayNewsButton.disabled = false;
+    els.todayNewsButton.textContent = "今日のニュース";
+  }
 }
 
 function mergeSources(current = [], added = []) {
@@ -403,6 +482,7 @@ async function loadNextPart() {
         duration: state.duration,
         part: nextPart,
         previousLines: state.episode.lines.slice(-6),
+        newsItems: state.newsItems,
       }),
     });
     const addition = await response.json();
@@ -583,27 +663,7 @@ function togglePlayback() {
 
 els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  stopPlayback({ reset: true });
-  const token = ++state.episodeToken;
-  state.topic = els.topic.value.trim();
-  state.continuePromise = null;
-  els.generateButton.disabled = true;
-  els.generateButton.firstElementChild.textContent = "最新情報を調べて番組を準備中…";
-  try {
-    const response = await api("/api/generate", {
-      method: "POST",
-      body: JSON.stringify({ topic: state.topic, level: selectedLevel(), duration: selectedDuration() }),
-    });
-    const episode = await response.json();
-    if (token !== state.episodeToken) return;
-    renderEpisode(episode, selectedLevel());
-    if (episode.demo) showToast("プレビューモードです。APIキーを設定すると、最新のWeb情報とAI音声で番組を作成します。");
-  } catch (error) {
-    showToast(error.message);
-  } finally {
-    els.generateButton.disabled = false;
-    els.generateButton.firstElementChild.textContent = "英語ラジオをつくる";
-  }
+  await generateEpisodeFromSelection({ newsItems: [] });
 });
 
 els.playButton.addEventListener("click", togglePlayback);
@@ -615,7 +675,8 @@ els.restartButton.addEventListener("click", () => {
   showToast("番組を最初から再生できます。");
 });
 els.showEnglishButton.addEventListener("click", () => setTranscriptLanguage("en"));
-els.showJapaneseButton.addEventListener("click", () => setTranscriptLanguage("ja"));
+els.showJapaneseButton.addEventListener("click", () => setTranscriptLanguage("both"));
+els.todayNewsButton.addEventListener("click", generateTodayNewsEpisode);
 els.form.querySelectorAll("input[name='duration']").forEach((input) => {
   input.addEventListener("change", updateDurationChoice);
 });
@@ -624,6 +685,7 @@ els.bgmMoodButtons.forEach((button) => {
     const mood = button.dataset.bgmMood;
     if (!BGM_TRACKS[mood]) return;
     state.bgmMood = mood;
+    state.bgmPartTracks.clear();
     updateBgmMoodButtons();
     const part = currentPartForLine();
     setBgmTrackForPart(part, { restart: true, play: state.bgmEnabled && state.isPlaying });

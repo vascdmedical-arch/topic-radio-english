@@ -1,6 +1,6 @@
 # Topic Radio
 
-Topic Radio researches current information about a topic on the web and turns it into a casual English-learning radio show with two hosts. The Japanese interface includes English and Japanese transcript switching, five listening levels, `10` / `30` / `60` minute and continuous listening modes, playback speed from `x0.5` to `x2.0`, and optional mood-based background music with volume control.
+Topic Radio researches current information about a topic on the web and turns it into a casual English-learning radio show with two hosts. The Japanese interface includes a "today's news" mode from Yahoo! JAPAN News topic RSS headlines, English / English-Japanese transcript switching, five listening levels, `10` / `30` / `60` minute and continuous listening modes, playback speed from `x0.5` to `x2.0` in `0.1` steps, and optional mood-based background music with volume control.
 
 ## Start the app
 
@@ -22,10 +22,11 @@ Without `OPENAI_API_KEY`, the app starts in preview mode. Preview mode uses a sa
 - `POST /api/generate` uses the OpenAI Responses API with the built-in `web_search` tool and Structured Outputs.
 - `POST /api/continue` adds researched 10-minute installments for longer and continuous shows.
 - `POST /api/speech` uses the OpenAI Audio Speech API. Audio is generated one dialogue turn at a time while listening.
+- `GET /api/yahoo-headlines` fetches Yahoo! JAPAN News topic RSS headlines across multiple categories for today's news mode.
 - The API key stays on the server and is never sent to the browser.
 - The app and API routes are protected by a simple password gate using an HTTP-only cookie.
 - Source links used for web research are shown beside the episode.
-- The bundled background music uses eight free Mixkit tracks grouped by mood: lively, relaxed, happy, and energetic. The track switches when playback enters each 10-minute installment, and the files are used under the [Mixkit Stock Music Free License](https://mixkit.co/license/#musicFree).
+- The bundled background music uses eight free Mixkit tracks grouped by mood: lively, relaxed, happy, energetic, and a mixed "random" mode. The track switches when playback enters each 10-minute installment, and the files are used under the [Mixkit Stock Music Free License](https://mixkit.co/license/#musicFree).
 
 ## Deploy to Render
 
