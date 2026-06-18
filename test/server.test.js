@@ -61,8 +61,8 @@ test("serves the app shell after login", async () => {
     assert.match(html, /Topic Radio/);
     assert.match(html, /BGM気分/);
     assert.match(html, /10分ごとのパート/);
-    assert.match(html, /styles\.css\?v=20260618-2/);
-    assert.match(html, /app\.js\?v=20260618-2/);
+    assert.match(html, /styles\.css\?v=20260618-3/);
+    assert.match(html, /app\.js\?v=20260618-3/);
   });
 });
 
@@ -109,6 +109,7 @@ test("serves mobile-friendly wrapping styles", async () => {
     assert.match(css, /grid-template-columns: 1fr/);
     assert.match(css, /duration-grid/);
     assert.match(css, /safe-area-inset/);
+    assert.match(css, /max-width: 700px/);
   });
 });
 

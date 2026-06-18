@@ -15,8 +15,10 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { width: 100%; max-width: 100%; scroll-behavior: smooth; }
 body {
+  width: 100%;
+  max-width: 100%;
   margin: 0;
   color: var(--ink);
   background:
@@ -295,9 +297,9 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .episode-shell { grid-template-columns: 1fr; }
   .sources-panel { position: static; }
 }
-@media (max-width: 520px) {
-  .hero { padding: 48px 0; }
-  .hero h1 { font-size: clamp(42px, 13vw, 56px); letter-spacing: -.07em; }
+@media (max-width: 700px) {
+  .hero { gap: 20px; padding: 34px 0 42px; }
+  .hero h1 { font-size: clamp(34px, 10.5vw, 48px); line-height: 1.22; letter-spacing: -.045em; }
   .hero-text { font-size: 16px; }
   .topbar {
     height: auto;
@@ -312,13 +314,17 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
     padding-right: max(12px, env(safe-area-inset-right));
   }
   .api-state { flex: 0 1 118px; max-width: 118px; text-align: right; }
-  .studio-card { padding: 22px 18px; border-radius: 18px; }
+  .studio-card { width: 100%; padding: 18px 14px; border-radius: 18px; }
   .card-heading { display: block; }
   .card-heading p { margin-top: 8px; }
+  .level-grid { grid-template-columns: 1fr; }
+  .level-grid label:first-child { grid-column: auto; }
   .duration-grid { grid-template-columns: repeat(2, 1fr); }
+  .episode-shell, .episode-main, .player-card, .transcript { width: 100%; max-width: 100%; }
   .episode-kicker { flex-wrap: wrap; }
-  .episode-main h2 { font-size: clamp(32px, 10vw, 42px); letter-spacing: -.05em; }
-  .hosts { gap: 12px; }
+  .episode-main h2 { font-size: clamp(28px, 8.8vw, 38px); line-height: 1.28; letter-spacing: -.035em; }
+  .hosts { flex-wrap: wrap; justify-content: flex-start; gap: 12px; padding: 18px 16px; }
+  .host { flex: 1 1 120px; }
   .signal { display: none; }
   .player-controls { gap: 14px; padding: 20px 16px 15px; }
   .play-button { width: 48px; height: 48px; }
@@ -326,6 +332,7 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .player-settings { padding: 12px 16px 20px; }
   .speed-control, .bgm-control { flex-wrap: wrap; }
   .speed-control label, .bgm-control label { flex: 1 0 100%; }
+  .speed-control input { flex-basis: calc(100% - 54px); }
   .speed-control output { width: auto; min-width: 42px; text-align: right; }
   .bgm-control label { margin-left: 0; }
   .bgm-control input { width: 100%; }
@@ -339,4 +346,6 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .text-button { width: 100%; text-align: left; }
   .line { grid-template-columns: 1fr; gap: 6px; padding-inline: 8px; }
   .line-speaker { padding-top: 0; }
+  .line p { font-size: 15px; line-height: 1.72; word-break: break-word; }
+  .source-link span { white-space: normal; }
 }
