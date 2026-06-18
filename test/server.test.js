@@ -56,10 +56,13 @@ test("serves the app shell after login", async () => {
     const cookie = await loginCookie(baseUrl);
     const response = await fetch(baseUrl, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-cache");
     const html = await response.text();
     assert.match(html, /Topic Radio/);
     assert.match(html, /BGM気分/);
     assert.match(html, /10分ごとのパート/);
+    assert.match(html, /styles\.css\?v=20260618-2/);
+    assert.match(html, /app\.js\?v=20260618-2/);
   });
 });
 
@@ -101,9 +104,11 @@ test("serves mobile-friendly wrapping styles", async () => {
     const response = await fetch(`${baseUrl}/styles.css`, { headers: { Cookie: cookie } });
     const css = await response.text();
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-cache");
     assert.match(css, /overflow-wrap: anywhere/);
     assert.match(css, /grid-template-columns: 1fr/);
     assert.match(css, /duration-grid/);
+    assert.match(css, /safe-area-inset/);
   });
 });
 

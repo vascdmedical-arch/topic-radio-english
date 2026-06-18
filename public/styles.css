@@ -28,6 +28,7 @@ body {
 
 button, textarea, input { font: inherit; }
 button { cursor: pointer; }
+img, svg, canvas, audio, video { max-width: 100%; }
 main, section, article, aside, div, p, h1, h2, h3 { min-width: 0; }
 p, h1, h2, h3, a, button, span { overflow-wrap: anywhere; }
 
@@ -298,9 +299,19 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .hero { padding: 48px 0; }
   .hero h1 { font-size: clamp(42px, 13vw, 56px); letter-spacing: -.07em; }
   .hero-text { font-size: 16px; }
-  .topbar { padding: 0 18px; }
-  main { padding-inline: 18px; }
-  .api-state { max-width: 130px; text-align: right; }
+  .topbar {
+    height: auto;
+    min-height: 68px;
+    gap: 12px;
+    padding: 12px max(14px, env(safe-area-inset-left)) 12px max(14px, env(safe-area-inset-right));
+  }
+  .brand { min-width: 0; }
+  .brand > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  main {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  .api-state { flex: 0 1 118px; max-width: 118px; text-align: right; }
   .studio-card { padding: 22px 18px; border-radius: 18px; }
   .card-heading { display: block; }
   .card-heading p { margin-top: 8px; }
@@ -312,8 +323,10 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .player-controls { gap: 14px; padding: 20px 16px 15px; }
   .play-button { width: 48px; height: 48px; }
   .now-playing { flex-wrap: wrap; }
-  .player-settings { padding-left: 24px; }
+  .player-settings { padding: 12px 16px 20px; }
   .speed-control, .bgm-control { flex-wrap: wrap; }
+  .speed-control label, .bgm-control label { flex: 1 0 100%; }
+  .speed-control output { width: auto; min-width: 42px; text-align: right; }
   .bgm-control label { margin-left: 0; }
   .bgm-control input { width: 100%; }
   .bgm-mood-control { grid-template-columns: 1fr; }
@@ -321,6 +334,9 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .bgm-help, .bgm-credit { text-align: left; }
   .transcript-heading { display: block; }
   .transcript-actions { flex-wrap: wrap; justify-content: flex-start; margin-top: 14px; }
+  .language-switch { width: 100%; display: grid; grid-template-columns: 1fr 1fr; border-radius: 18px; }
+  .language-button { min-width: 0; }
+  .text-button { width: 100%; text-align: left; }
   .line { grid-template-columns: 1fr; gap: 6px; padding-inline: 8px; }
   .line-speaker { padding-top: 0; }
 }

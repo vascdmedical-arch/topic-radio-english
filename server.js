@@ -489,7 +489,14 @@ async function serveStatic(req, res) {
   if (!fileStat.isFile()) {
     throw new HttpError(404, "Not found.");
   }
-  res.writeHead(200, { "Content-Type": MIME_TYPES[extname(filePath)] || "application/octet-stream" });
+  const extension = extname(filePath);
+  const cacheControl = [".html", ".css", ".js"].includes(extension)
+    ? "no-cache"
+    : "public, max-age=86400";
+  res.writeHead(200, {
+    "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
+    "Cache-Control": cacheControl,
+  });
   createReadStream(filePath).pipe(res);
 }
 
