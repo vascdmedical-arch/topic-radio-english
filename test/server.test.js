@@ -57,16 +57,19 @@ test("serves the app shell after login", async () => {
     const response = await fetch(baseUrl, { headers: { Cookie: cookie } });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-cache");
+    assert.equal(response.headers.get("permissions-policy"), "speaker-selection=(self)");
     const html = await response.text();
     assert.match(html, /Topic Radio/);
     assert.match(html, /BGM気分/);
     assert.match(html, /10分ごとのパート/);
     assert.match(html, /今日のニュース/);
     assert.match(html, /英日併記/);
-    assert.match(html, /バックグラウンド再生対応/);
+    assert.match(html, /音声出力を選ぶ/);
+    assert.match(html, /Bluetooth接続後/);
+    assert.match(html, /id="speechAudio"/);
     assert.match(html, /step="0\.1"/);
-    assert.match(html, /styles\.css\?v=20260621-1/);
-    assert.match(html, /app\.js\?v=20260621-1/);
+    assert.match(html, /styles\.css\?v=20260622-1/);
+    assert.match(html, /app\.js\?v=20260622-1/);
   });
 });
 
@@ -80,6 +83,9 @@ test("serves background playback support in the browser script", async () => {
     assert.match(js, /MediaMetadata/);
     assert.match(js, /preloadAudio/);
     assert.match(js, /visibilitychange/);
+    assert.match(js, /selectAudioOutput/);
+    assert.match(js, /setSinkId/);
+    assert.match(js, /speechAudio/);
   });
 });
 
