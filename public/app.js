@@ -82,6 +82,8 @@ const state = {
   activeAudio: null,
   activeResolve: null,
   audioCache: new Map(),
+  audioOutputId: "",
+  audioOutputLabel: "端末の標準出力",
   demoMode: false,
   transcriptLanguage: "en",
   topic: "",
@@ -101,6 +103,8 @@ const state = {
 
 const els = {
   apiState: $("#apiState"),
+  audioOutputButton: $("#audioOutputButton"),
+  audioOutputStatus: $("#audioOutputStatus"),
   bgmLabel: $("#bgmLabel"),
   bgmMoodButtons: document.querySelectorAll("[data-bgm-mood]"),
   bgmToggle: $("#bgmToggle"),
@@ -124,6 +128,7 @@ const els = {
   loadMoreButton: $("#loadMoreButton"),
   showEnglishButton: $("#showEnglishButton"),
   showJapaneseButton: $("#showJapaneseButton"),
+  speechAudio: $("#speechAudio"),
   sourcesList: $("#sourcesList"),
   speed: $("#speed"),
   speedValue: $("#speedValue"),
@@ -363,6 +368,90 @@ function updateBgmMoodButtons() {
   });
 }
 
+function supportsAudioOutputSelection() {
+  return Boolean(
+    navigator.mediaDevices?.selectAudioOutput
+      && typeof els.speechAudio?.setSinkId === "function",
+  );
+}
+
+function updateAudioOutputUi() {
+  els.audioOutputButton.textContent = supportsAudioOutputSelection()
+    ? "音声出力を選ぶ"
+    : "Bluetoothを再接続";
+  els.audioOutputStatus.textContent = state.audioOutputLabel;
+}
+
+async function applyAudioOutput(audio) {
+  if (!audio || typeof audio.setSinkId !== "function") return false;
+  await audio.setSinkId(state.audioOutputId);
+  return true;
+}
+
+async function syncAudioOutputs() {
+  const audioElements = [els.speechAudio, state.bgmAudio].filter(Boolean);
+  const supported = audioElements.filter((audio) => typeof audio.setSinkId === "function");
+  await Promise.all(supported.map((audio) => audio.setSinkId(state.audioOutputId)));
+  return supported.length > 0;
+}
+
+async function playWithAudioOutput(audio) {
+  try {
+    await applyAudioOutput(audio);
+  } catch {
+    state.audioOutputId = "";
+    state.audioOutputLabel = "端末の標準出力";
+    updateAudioOutputUi();
+    await applyAudioOutput(audio).catch(() => {});
+  }
+  await audio.play();
+}
+
+async function chooseAudioOutput() {
+  els.audioOutputButton.disabled = true;
+  try {
+    if (supportsAudioOutputSelection()) {
+      const device = state.audioOutputId
+        ? await navigator.mediaDevices.selectAudioOutput({ deviceId: state.audioOutputId })
+        : await navigator.mediaDevices.selectAudioOutput();
+      state.audioOutputId = device.deviceId;
+      state.audioOutputLabel = device.label || "選択した音声出力";
+      await syncAudioOutputs();
+      updateAudioOutputUi();
+      showToast(`${state.audioOutputLabel} に切り替えました。`);
+      return;
+    }
+
+    const shouldResume = state.isPlaying;
+    const resumeIndex = state.index;
+    if (shouldResume) stopPlayback();
+    state.audioOutputId = "";
+    state.audioOutputLabel = "端末のBluetooth設定に再接続";
+    await syncAudioOutputs();
+    updateAudioOutputUi();
+    if (shouldResume) {
+      state.index = resumeIndex;
+      state.isPlaying = true;
+      updatePlaybackButton();
+      await startBgm();
+      runPlayback();
+    }
+    showToast("端末の音声出力に再接続しました。Bluetooth接続を確認してください。");
+  } catch (error) {
+    const cancelled = ["AbortError", "NotAllowedError"].includes(error?.name);
+    showToast(cancelled ? "音声出力の変更をキャンセルしました。" : "音声出力を変更できませんでした。");
+  } finally {
+    els.audioOutputButton.disabled = false;
+  }
+}
+
+function releaseAudioCache() {
+  for (const source of state.audioCache.values()) {
+    if (source?.src?.startsWith("blob:")) URL.revokeObjectURL(source.src);
+  }
+  state.audioCache.clear();
+}
+
 function createBgmAudio(track) {
   const audio = new Audio(track.src);
   audio.loop = true;
@@ -371,6 +460,7 @@ function createBgmAudio(track) {
   audio.addEventListener("error", () => showToast("BGMを読み込めませんでした。"));
   state.bgmAudio = audio;
   state.bgmTrack = track;
+  applyAudioOutput(audio).catch(() => {});
   return audio;
 }
 
@@ -382,7 +472,7 @@ function setBgmTrackForPart(part, { restart = false, play = false } = {}) {
   if (state.bgmAudio && state.bgmTrack?.src === track.src) {
     state.bgmAudio.volume = Number(els.bgmVolume.value);
     if (restart) state.bgmAudio.currentTime = 0;
-    if (play) state.bgmAudio.play().catch(() => showToast("BGMを再生できませんでした。"));
+    if (play) playWithAudioOutput(state.bgmAudio).catch(() => showToast("BGMを再生できませんでした。"));
     return state.bgmAudio;
   }
 
@@ -391,7 +481,7 @@ function setBgmTrackForPart(part, { restart = false, play = false } = {}) {
   const audio = createBgmAudio(track);
   if (restart) audio.currentTime = 0;
   if (play || (wasPlaying && state.bgmEnabled)) {
-    audio.play().catch(() => showToast("BGMを再生できませんでした。"));
+    playWithAudioOutput(audio).catch(() => showToast("BGMを再生できませんでした。"));
   }
   return audio;
 }
@@ -413,7 +503,7 @@ function renderEpisode(episode, level) {
   state.index = 0;
   state.currentPlaybackPart = Number(episode.part || 1);
   state.partStarts = [{ part: state.currentPlaybackPart, index: 0 }];
-  state.audioCache.clear();
+  releaseAudioCache();
   state.bgmPartTracks.clear();
   els.episodeTitle.textContent = episode.title;
   els.episodeDek.textContent = episode.dek;
@@ -545,7 +635,7 @@ async function startBgm() {
   const audio = syncBgmToCurrentPart({ play: false });
   audio.volume = Number(els.bgmVolume.value);
   try {
-    await audio.play();
+    await playWithAudioOutput(audio);
   } catch {
     showToast("BGMを再生できませんでした。");
   }
@@ -585,12 +675,12 @@ async function getAudio(index) {
     method: "POST",
     body: JSON.stringify({ speaker: line.speaker, text: line.text, speed }),
   });
-  const audio = new Audio(URL.createObjectURL(await response.blob()));
-  audio.preload = "auto";
-  audio.playsInline = true;
-  audio.dataset.generatedSpeed = speed;
-  state.audioCache.set(cacheKey, audio);
-  return audio;
+  const source = {
+    src: URL.createObjectURL(await response.blob()),
+    generatedSpeed: speed,
+  };
+  state.audioCache.set(cacheKey, source);
+  return source;
 }
 
 function preloadAudio(index) {
@@ -614,17 +704,22 @@ function speakWithBrowser(index, session) {
   });
 }
 
-function playAudio(audio, session) {
+function playAudio(source, session) {
   return new Promise((resolve, reject) => {
     if (session !== state.session) return resolve();
+    const audio = els.speechAudio;
     state.activeAudio = audio;
     state.activeResolve = resolve;
+    audio.pause();
+    audio.src = source.src;
+    audio.dataset.generatedSpeed = source.generatedSpeed;
+    audio.load();
     audio.currentTime = 0;
     audio.playbackRate = Number(els.speed.value) / Number(audio.dataset.generatedSpeed || 1);
     audio.onended = resolve;
     audio.onerror = () => reject(new Error("音声を再生できませんでした。"));
     updateMediaSession();
-    audio.play().catch(reject);
+    playWithAudioOutput(audio).catch(reject);
   });
 }
 
@@ -747,6 +842,7 @@ els.form.addEventListener("submit", async (event) => {
 });
 
 els.playButton.addEventListener("click", togglePlayback);
+els.audioOutputButton.addEventListener("click", chooseAudioOutput);
 els.loadMoreButton.addEventListener("click", () => {
   loadNextPart().catch((error) => showToast(error.message));
 });
@@ -794,9 +890,17 @@ document.addEventListener("visibilitychange", () => {
   updateMediaSession();
   if (!document.hidden) updateProgress();
 });
+navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+  syncAudioOutputs().catch(() => {
+    state.audioOutputId = "";
+    state.audioOutputLabel = "端末の標準出力";
+    updateAudioOutputUi();
+  });
+});
 
 updateDurationChoice();
 updateBgmMoodButtons();
 updateBgmCredit();
+updateAudioOutputUi();
 setupMediaSession();
 checkStatus();
