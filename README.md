@@ -1,6 +1,6 @@
 # Topic Radio
 
-Topic Radio researches current information about a topic on the web and turns it into a casual English-learning radio show with two hosts. The Japanese interface includes a "today's news" mode from Yahoo! JAPAN News topic RSS headlines, English / English-Japanese transcript switching, five listening levels, `10` / `30` / `60` minute and continuous listening modes, playback speed from `x0.5` to `x2.0` in `0.1` steps, optional mood-based background music with volume control, and Media Session support for more stable background playback on mobile devices.
+Topic Radio researches current information about a topic on the web and turns it into a casual English-learning radio show with two hosts. The Japanese interface includes a "today's news" mode from Yahoo! JAPAN News topic RSS headlines, English / English-Japanese transcript switching, five listening levels, `10` / `30` / `60` minute and continuous listening modes, playback speed from `x0.5` to `x2.0` in `0.1` steps, optional mood-based background music with volume control, Media Session support for more stable background playback, and audio output selection for supported Bluetooth devices.
 
 ## Start the app
 
@@ -28,6 +28,7 @@ Without `OPENAI_API_KEY`, the app starts in preview mode. Preview mode uses a sa
 - Source links used for web research are shown beside the episode.
 - The bundled background music uses eight free Mixkit tracks grouped by mood: lively, relaxed, happy, energetic, and a mixed "random" mode. The track switches when playback enters each 10-minute installment, and the files are used under the [Mixkit Stock Music Free License](https://mixkit.co/license/#musicFree).
 - Media Session metadata and controls are set during playback so API-generated audio is more likely to continue from the lock screen or while another app is open. Browser preview speech may still be paused by some mobile operating systems.
+- API-generated speech uses one persistent audio element so system output changes can carry across dialogue turns. Browsers that support the Audio Output Devices API can select an output device in the player; other browsers can reconnect playback to the device's current system output.
 
 ## Deploy to Render
 
