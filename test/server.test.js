@@ -63,9 +63,23 @@ test("serves the app shell after login", async () => {
     assert.match(html, /10分ごとのパート/);
     assert.match(html, /今日のニュース/);
     assert.match(html, /英日併記/);
+    assert.match(html, /バックグラウンド再生対応/);
     assert.match(html, /step="0\.1"/);
-    assert.match(html, /styles\.css\?v=20260618-4/);
-    assert.match(html, /app\.js\?v=20260618-4/);
+    assert.match(html, /styles\.css\?v=20260621-1/);
+    assert.match(html, /app\.js\?v=20260621-1/);
+  });
+});
+
+test("serves background playback support in the browser script", async () => {
+  await withServer(async (baseUrl) => {
+    const cookie = await loginCookie(baseUrl);
+    const response = await fetch(`${baseUrl}/app.js`, { headers: { Cookie: cookie } });
+    const js = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(js, /mediaSession/);
+    assert.match(js, /MediaMetadata/);
+    assert.match(js, /preloadAudio/);
+    assert.match(js, /visibilitychange/);
   });
 });
 

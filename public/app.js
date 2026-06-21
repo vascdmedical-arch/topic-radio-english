@@ -284,6 +284,28 @@ function updateEstimate() {
   els.timeEstimate.textContent = `約${Math.max(1, Math.round(minutes))}分`;
 }
 
+function updateMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  if (state.episode && "MediaMetadata" in window) {
+    navigator.mediaSession.metadata = new window.MediaMetadata({
+      title: state.episode.title || "Topic Radio",
+      artist: "Maya & Ben",
+      album: "トピックラジオ",
+    });
+  }
+  try {
+    navigator.mediaSession.playbackState = state.isPlaying ? "playing" : "paused";
+  } catch {
+    // Some browsers expose Media Session only partially.
+  }
+}
+
+function updatePlaybackButton() {
+  els.playIcon.textContent = state.isPlaying ? "❚❚" : "▶";
+  els.playButton.setAttribute("aria-label", state.isPlaying ? "番組を一時停止" : "番組を再生");
+  updateMediaSession();
+}
+
 function updateProgress() {
   const count = state.episode?.lines.length || 1;
   const progress = state.index >= count ? 100 : (state.index / count) * 100;
@@ -291,7 +313,7 @@ function updateProgress() {
   document.querySelectorAll(".line").forEach((line, index) => {
     const active = index === state.index && state.index < count;
     line.classList.toggle("active", active);
-    if (active) line.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (active && !document.hidden) line.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
 
@@ -406,6 +428,7 @@ function renderEpisode(episode, level) {
   els.nowSpeaker.textContent = episode.demo ? "プレビューを再生できます" : "番組を再生できます";
   els.episodeShell.classList.remove("is-hidden");
   els.episodeShell.scrollIntoView({ behavior: "smooth", block: "start" });
+  updateMediaSession();
 }
 
 async function generateEpisodeFromSelection({ newsItems = [], topic = els.topic.value.trim(), sourceLabel = "" } = {}) {
@@ -497,6 +520,7 @@ async function loadNextPart() {
     renderSources(state.episode.sources);
     updateEstimate();
     updateProgress();
+    updateMediaSession();
     if (!state.isPlaying) els.nowSpeaker.textContent = `パート${addition.part}を再生できます`;
     if (addition.demo && state.duration === "continuous" && !addition.has_more) {
       showToast("継続モードのプレビューは第2部までです。APIキーを設定すると、聴いている間は継続します。");
@@ -543,8 +567,7 @@ function stopPlayback({ reset = false } = {}) {
   state.activeResolve?.();
   state.activeResolve = null;
   state.loopRunning = false;
-  els.playIcon.textContent = "▶";
-  els.playButton.setAttribute("aria-label", "番組を再生");
+  updatePlaybackButton();
   if (reset) {
     state.index = 0;
     if (state.episode) setBgmTrackForPart(currentPartForLine(0), { restart: true });
@@ -563,9 +586,16 @@ async function getAudio(index) {
     body: JSON.stringify({ speaker: line.speaker, text: line.text, speed }),
   });
   const audio = new Audio(URL.createObjectURL(await response.blob()));
+  audio.preload = "auto";
+  audio.playsInline = true;
   audio.dataset.generatedSpeed = speed;
   state.audioCache.set(cacheKey, audio);
   return audio;
+}
+
+function preloadAudio(index) {
+  if (state.demoMode || !state.episode || index >= state.episode.lines.length) return;
+  getAudio(index).catch(() => {});
 }
 
 function speakWithBrowser(index, session) {
@@ -593,8 +623,56 @@ function playAudio(audio, session) {
     audio.playbackRate = Number(els.speed.value) / Number(audio.dataset.generatedSpeed || 1);
     audio.onended = resolve;
     audio.onerror = () => reject(new Error("音声を再生できませんでした。"));
+    updateMediaSession();
     audio.play().catch(reject);
   });
+}
+
+function jumpToLine(index) {
+  if (!state.episode?.lines.length) return;
+  const shouldResume = state.isPlaying;
+  const maxIndex = state.episode.lines.length - 1;
+  stopPlayback();
+  state.index = Math.max(0, Math.min(index, maxIndex));
+  syncBgmToCurrentPart({ restart: true });
+  updateProgress();
+  const line = state.episode.lines[state.index];
+  els.nowSpeaker.textContent = `${line.speaker} から再生できます`;
+  if (shouldResume) {
+    state.isPlaying = true;
+    updatePlaybackButton();
+    startBgm();
+    runPlayback();
+  } else {
+    updateMediaSession();
+  }
+}
+
+function setupMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  const setHandler = (action, handler) => {
+    try {
+      navigator.mediaSession.setActionHandler(action, handler);
+    } catch {
+      // Unsupported media actions vary by browser.
+    }
+  };
+  setHandler("play", () => {
+    if (state.episode && !state.isPlaying) togglePlayback();
+  });
+  setHandler("pause", () => {
+    if (!state.episode) return;
+    stopPlayback();
+    els.nowSpeaker.textContent = "一時停止中";
+  });
+  setHandler("stop", () => {
+    if (!state.episode) return;
+    stopPlayback();
+    els.nowSpeaker.textContent = "停止しました";
+  });
+  setHandler("previoustrack", () => jumpToLine(state.index - 1));
+  setHandler("nexttrack", () => jumpToLine(state.index + 1));
+  updateMediaSession();
 }
 
 async function runPlayback() {
@@ -623,9 +701,11 @@ async function runPlayback() {
       syncBgmToCurrentPart({ restart: true, play: state.bgmEnabled && state.isPlaying });
       els.nowSpeaker.textContent = `${line.speaker} が話しています`;
       updateProgress();
+      updateMediaSession();
       if (state.demoMode) {
         await speakWithBrowser(state.index, session);
       } else {
+        preloadAudio(state.index + 1);
         await playAudio(await getAudio(state.index), session);
       }
       state.activeResolve = null;
@@ -642,7 +722,8 @@ async function runPlayback() {
     stopPlayback();
     showToast(error.message);
   } finally {
-    state.loopRunning = false;
+    if (session === state.session) state.loopRunning = false;
+    updateMediaSession();
   }
 }
 
@@ -655,8 +736,7 @@ function togglePlayback() {
   }
   if (state.index >= state.episode.lines.length) state.index = 0;
   state.isPlaying = true;
-  els.playIcon.textContent = "❚❚";
-  els.playButton.setAttribute("aria-label", "番組を一時停止");
+  updatePlaybackButton();
   startBgm();
   runPlayback();
 }
@@ -710,8 +790,13 @@ els.bgmVolume.addEventListener("input", () => {
   if (!state.bgmAudio) return;
   state.bgmAudio.volume = Number(els.bgmVolume.value);
 });
+document.addEventListener("visibilitychange", () => {
+  updateMediaSession();
+  if (!document.hidden) updateProgress();
+});
 
 updateDurationChoice();
 updateBgmMoodButtons();
 updateBgmCredit();
+setupMediaSession();
 checkStatus();

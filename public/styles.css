@@ -261,7 +261,8 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
 .bgm-mood-button { padding: 6px 8px; color: rgba(255,255,255,.62); border: 1px solid rgba(255,255,255,.18); border-radius: 18px; background: rgba(255,255,255,.04); font-size: 11px; font-weight: 700; }
 .bgm-mood-button:hover { color: rgba(255,255,255,.84); border-color: rgba(255,255,255,.34); }
 .bgm-mood-button.is-active { color: var(--ink); border-color: var(--yellow); background: var(--yellow); }
-.bgm-help { margin: 8px 0 0; color: rgba(255,255,255,.42); font-size: 10px; line-height: 1.45; text-align: right; }
+.bgm-help, .background-help { margin: 8px 0 0; color: rgba(255,255,255,.42); font-size: 10px; line-height: 1.45; text-align: right; }
+.background-help { color: rgba(238,213,132,.76); }
 .bgm-credit { margin: 10px 0 0; color: rgba(255,255,255,.43); font-size: 10px; letter-spacing: .03em; text-align: right; }
 .bgm-credit a { color: rgba(238,213,132,.8); text-decoration: none; }
 .bgm-credit a:hover { color: var(--yellow); text-decoration: underline; }
@@ -362,7 +363,7 @@ textarea:focus { border-color: var(--mint-strong); box-shadow: 0 0 0 4px rgba(15
   .bgm-mood-control { grid-template-columns: 1fr; }
   .bgm-mood-grid { grid-template-columns: repeat(2, 1fr); }
   .bgm-mood-button:last-child { grid-column: 1 / -1; }
-  .bgm-help, .bgm-credit { text-align: left; }
+  .bgm-help, .background-help, .bgm-credit { text-align: left; }
   .transcript-heading { display: block; }
   .transcript-actions { flex-wrap: wrap; justify-content: flex-start; margin-top: 14px; }
   .language-switch { width: 100%; display: grid; grid-template-columns: 1fr 1fr; border-radius: 18px; }
