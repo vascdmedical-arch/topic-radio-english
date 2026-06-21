@@ -614,6 +614,7 @@ async function serveStatic(req, res) {
   res.writeHead(200, {
     "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
     "Cache-Control": cacheControl,
+    ...(extension === ".html" ? { "Permissions-Policy": "speaker-selection=(self)" } : {}),
   });
   createReadStream(filePath).pipe(res);
 }
